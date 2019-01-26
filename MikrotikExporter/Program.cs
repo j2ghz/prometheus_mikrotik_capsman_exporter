@@ -17,7 +17,7 @@ namespace MikrotikExporter
             var con = await ConnectionFactory.OpenConnectionAsync(TikConnectionType.ApiSsl_v2, "192.168.0.1", "read",
                 "");
             DefaultCollectorRegistry.Instance.RegisterOnDemandCollectors(new MikrotikCollector(con));
-            var server = new MetricServer("127.0.0.1", 1234).Start();
+            var server = new MetricServer( 1234).Start();
             Console.WriteLine($"Started at {DateTime.Now}");
 
             ManualResetEvent quitEvent = new ManualResetEvent(false);
