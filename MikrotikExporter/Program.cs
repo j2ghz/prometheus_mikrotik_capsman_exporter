@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Prometheus;
 using Prometheus.Advanced;
@@ -18,17 +19,18 @@ namespace MikrotikExporter
             DefaultCollectorRegistry.Instance.RegisterOnDemandCollectors(new MikrotikCollector(con));
             var server = new MetricServer("127.0.0.1", 1234).Start();
             Console.WriteLine($"Started at {DateTime.Now}");
+
+            ManualResetEvent quitEvent = new ManualResetEvent(false);
             Console.CancelKeyPress += (sender, eventArgs) =>
             {
                 Console.WriteLine("Stopping...");
-                server.Stop();
+                quitEvent.Set();
+                eventArgs.Cancel = true;
             };
 
-            while (true)
-            {
-                Console.WriteLine("The server is running, press Ctrl+C to stop.");
-                Console.ReadLine();
-            }
+            quitEvent.WaitOne();
+
+            server.Stop();
         }
     }
 
