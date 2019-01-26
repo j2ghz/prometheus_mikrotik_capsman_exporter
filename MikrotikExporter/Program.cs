@@ -13,11 +13,22 @@ namespace MikrotikExporter
     {
         private static async Task Main(string[] args)
         {
-            var con = await ConnectionFactory.OpenConnectionAsync(TikConnectionType.ApiSsl_v2, "192.168.0.1", "read", "");
+            var con = await ConnectionFactory.OpenConnectionAsync(TikConnectionType.ApiSsl_v2, "192.168.0.1", "read",
+                "");
             DefaultCollectorRegistry.Instance.RegisterOnDemandCollectors(new MikrotikCollector(con));
             var server = new MetricServer("127.0.0.1", 1234).Start();
-            Console.ReadLine();
-            await server.StopAsync();
+            Console.WriteLine($"Started at {DateTime.Now}");
+            Console.CancelKeyPress += (sender, eventArgs) =>
+            {
+                Console.WriteLine("Stopping...");
+                server.Stop();
+            };
+
+            while (true)
+            {
+                Console.WriteLine("The server is running, press Ctrl+C to stop.");
+                Console.ReadLine();
+            }
         }
     }
 
