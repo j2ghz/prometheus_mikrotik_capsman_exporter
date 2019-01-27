@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,13 +15,14 @@ namespace MikrotikExporter
     {
         private static async Task Main(string[] args)
         {
+            Trace.Listeners.Add(new TextWriterTraceListener(Console.Error));
             var con = await ConnectionFactory.OpenConnectionAsync(TikConnectionType.ApiSsl_v2, "192.168.0.1", "read",
                 "");
             DefaultCollectorRegistry.Instance.RegisterOnDemandCollectors(new MikrotikCollector(con));
-            var server = new MetricServer( 1234).Start();
+            var server = new MetricServer(1234).Start();
             Console.WriteLine($"Started at {DateTime.Now}");
 
-            ManualResetEvent quitEvent = new ManualResetEvent(false);
+            var quitEvent = new ManualResetEvent(false);
             Console.CancelKeyPress += (sender, eventArgs) =>
             {
                 Console.WriteLine("Stopping...");
