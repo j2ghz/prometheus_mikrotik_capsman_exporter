@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,6 +9,8 @@ using Prometheus.Advanced;
 using tik4net;
 using tik4net.Objects;
 using tik4net.Objects.CapsMan;
+using tik4net.Objects.Interface;
+using tik4net.Objects.Ip.DhcpServer;
 
 namespace MikrotikExporter
 {
@@ -39,9 +42,14 @@ namespace MikrotikExporter
     internal class MikrotikCollector : IOnDemandCollector
     {
         private readonly ITikConnection connection;
-        private Counter rxBytes;
+
+        private readonly SetCounter rxBytes = new SetCounter("Mikrotik_Client_RxBytes",
+            "Bytes received from the CAPsMAN client", new[] {"MAC", "IP", "Hostname"}, true);
+
+        private readonly SetCounter txBytes = new SetCounter("Mikrotik_Client_TxBytes",
+            "Bytes transmitted to the CAPsMAN client", new[] {"MAC", "IP", "Hostname"}, true);
+
         private Gauge signal;
-        private Counter txBytes;
 
         public MikrotikCollector(ITikConnection connection)
         {
@@ -51,29 +59,44 @@ namespace MikrotikExporter
 
         public void RegisterMetrics(ICollectorRegistry registry)
         {
-            txBytes = Metrics.WithCustomRegistry(registry).CreateCounter("CAPsMAN_Clients_TxBytes",
-                "Bytes transmitted to the CAPsMAN client", "MAC");
-            rxBytes = Metrics.WithCustomRegistry(registry).CreateCounter("CAPsMAN_Clients_RxBytes",
-                "Bytes received from the CAPsMAN client", "MAC");
+            registry.GetOrAdd(txBytes);
+            registry.GetOrAdd(rxBytes);
             signal = Metrics.WithCustomRegistry(registry)
-                .CreateGauge("CAPsMAN_Clients_Signal", "CAPsMAN Client's signal", "MAC");
+                .CreateGauge("CAPsMAN_Clients_Signal", "CAPsMAN Client's signal", "MAC", "IP", "Hostname");
         }
 
         public void UpdateMetrics()
         {
-            var clients = connection.LoadAll<CapsManRegistrationTable>();
-            foreach (var client in clients)
+            var capsManRegistrationTables = connection.LoadAll<CapsManRegistrationTable>();
+            var dhcpServerLeases = connection.LoadAll<DhcpServerLease>();
+            var interfaces = connection.LoadAll<Interface>();
+
+            foreach (var client in capsManRegistrationTables)
             {
+                var dhcpLease = dhcpServerLeases.SingleOrDefault(l => client.MACAddress == l.MacAddress);
+
                 var match = Regex.Match(client.Bytes, "([0-9]+),([0-9]+)");
 
-                var txBytesClient = txBytes.WithLabels(client.MACAddress);
-                txBytesClient.Inc(long.Parse(match.Groups[1].Value) - txBytesClient.Value);
+                txBytes.WithLabels(client.MACAddress, dhcpLease?.Address ?? "", dhcpLease?.HostName ?? "")
+                    .Set(long.Parse(match.Groups[1].Value));
 
-                var rxBytesClient = rxBytes.WithLabels(client.MACAddress);
-                rxBytesClient.Inc(long.Parse(match.Groups[2].Value) - rxBytesClient.Value);
+                rxBytes.WithLabels(client.MACAddress, dhcpLease?.Address ?? "", dhcpLease?.HostName ?? "")
+                    .Set(long.Parse(match.Groups[2].Value));
 
-                var signalClient = signal.WithLabels(client.MACAddress);
+                var signalClient =
+                    signal.WithLabels(client.MACAddress, dhcpLease?.Address ?? "", dhcpLease?.HostName ?? "");
                 signalClient.Set(client.Signal);
+            }
+
+            foreach (var client in interfaces)
+            {
+                var dhcpLease = dhcpServerLeases.SingleOrDefault(l => client.MacAddress == l.MacAddress);
+
+                txBytes.WithLabels(client.MacAddress, dhcpLease?.Address ?? "", dhcpLease?.HostName ?? "")
+                    .Set(client.TxByte);
+
+                rxBytes.WithLabels(client.MacAddress, dhcpLease?.Address ?? "", dhcpLease?.HostName ?? "")
+                    .Set(client.RxByte);
             }
         }
     }
