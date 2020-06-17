@@ -1,4 +1,4 @@
-FROM microsoft/dotnet:sdk
+FROM mcr.microsoft.com/dotnet/core/sdk:2.2
 WORKDIR /app
 ADD MikrotikExporter/ /app
 RUN dotnet restore && dotnet build
